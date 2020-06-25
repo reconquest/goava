@@ -1,0 +1,178 @@
+package stream_test
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/reconquest/goava/collector"
+	"github.com/reconquest/goava/stream"
+)
+
+type Movie struct {
+	Name   string
+	Rating int
+}
+
+type MoviesByRating map[int][]string
+
+func TestFilter(t *testing.T) {
+	result := stream.
+		Of([]int{1, 2, 3, 4, 5}).
+		Filter(func(x int) bool {
+			return x%2 == 0
+		}).
+		Slice()
+	if !same(result, []int{2, 4}) {
+		t.Fatal(result)
+	}
+}
+
+func TestMap(t *testing.T) {
+	result := stream.Map(
+		stream.Of([]int{1, 2}),
+		func(x int) string {
+			return fmt.Sprint(x)
+		},
+	).Slice()
+	if !same(result, []string{"1", "2"}) {
+		t.Fatal(result)
+	}
+}
+
+type MovieVote struct {
+	Name  string
+	Score int
+}
+
+func TestToMap(t *testing.T) {
+	items := stream.Of(
+		[]MovieVote{
+			{Name: "A", Score: 1},
+			{Name: "A", Score: 2},
+			{Name: "B", Score: 9},
+			{Name: "B", Score: 10},
+			{Name: "B", Score: 8},
+			{Name: "C", Score: 7},
+			{Name: "C", Score: 8},
+			{Name: "C", Score: 7},
+		},
+	)
+
+	collect := collector.ToMap(MovieVote, string, int)(
+		func(movie MovieVote) (string, int) {
+			// allow other threads to jump on entries
+			// otherwise not all goroutines are involved
+			time.Sleep(time.Millisecond * 30)
+
+			return movie.Name, movie.Score
+		},
+		func(total, score int) int {
+			return total + score
+		},
+	)
+
+	sequential := stream.Collect(items, collect)
+
+	if len(sequential) != 3 {
+		t.Errorf("[sequential] expected 3 items, got %d", len(sequential))
+	}
+
+	if sequential["A"] != 3 {
+		t.Error("[sequential] A: ", sequential["A"])
+	}
+	if sequential["B"] != 27 {
+		t.Error("[sequential] B: ", sequential["B"])
+	}
+	if sequential["C"] != 22 {
+		t.Error("[sequential] C: ", sequential["C"])
+	}
+
+	items = items.Parallel()
+	parallel := stream.Collect(items, collect)
+
+	if len(parallel) != 3 {
+		t.Errorf("[parallel] expected 3 items, got %d", len(parallel))
+	}
+
+	if parallel["A"] != 3 {
+		t.Error("[parallel] A: ", parallel["A"])
+	}
+	if parallel["B"] != 27 {
+		t.Error("[parallel] B: ", parallel["B"])
+	}
+	if parallel["C"] != 22 {
+		t.Error("[parallel] C: ", parallel["C"])
+	}
+}
+
+func TestStrangeMoviesCustomCollectorButAtLeastItIsParallel(t *testing.T) {
+	movies := stream.Of(
+		[]Movie{
+			{Name: "1 star A", Rating: 1},
+			{Name: "1 star B", Rating: 1},
+			{Name: "1 star C", Rating: 1},
+			{Name: "3 stars A", Rating: 3},
+			{Name: "3 stars B", Rating: 3},
+			{Name: "5 stars A", Rating: 5},
+			{Name: "9 stars A", Rating: 9},
+		},
+	).Parallel()
+
+	collect := collector.Of(
+		func() MoviesByRating {
+			return MoviesByRating{}
+		},
+		func(col MoviesByRating, movie Movie) MoviesByRating {
+			names, _ := col[movie.Rating]
+			col[movie.Rating] = append(names, movie.Name)
+			return col
+		},
+		func(col MoviesByRating) MoviesByRating {
+			return col
+		},
+		func(col1 MoviesByRating, col2 MoviesByRating) MoviesByRating {
+			for k2, v2 := range col2 {
+				v1, _ := col1[k2]
+				col1[k2] = append(v1, v2...)
+			}
+
+			return col1
+		},
+	)
+
+	result := stream.Collect(Movie, MoviesByRating)(movies, collect)
+	if len(result) != 4 {
+		t.Errorf("expected 4 items, got %d", len(result))
+	}
+
+	if !same(result[1], []string{"1 star A", "1 star B", "1 star C"}) {
+		t.Error(1, result[1])
+	}
+	if !same(result[3], []string{"3 stars A", "3 stars B"}) {
+		t.Error(3, result[3])
+	}
+	if !same(result[5], []string{"5 stars A"}) {
+		t.Error(5, result[5])
+	}
+	if !same(result[9], []string{"9 stars A"}) {
+		t.Error(9, result[9])
+	}
+}
+
+func same(type Type comparable)(a, b []Type) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range b {
+		if a[k] != v {
+			return false
+		}
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}

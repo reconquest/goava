@@ -1,0 +1,75 @@
+package collector
+
+type Collector(type Type, Col) interface {
+	Supply() Col
+	Accumulate(Col, Type) Col
+	Finish(Col) Col
+	Combine(Col, Col) Col
+}
+
+type impl(type Type, Col) struct {
+	supply     func() Col
+	accumulate func(Col, Type) Col
+	finish     func(Col) Col
+	combine    func(Col, Col) Col
+}
+
+func Of(type Type, Col)(
+	supply func() Col,
+	accumulate func(Col, Type) Col,
+	finish func(Col) Col,
+	combine func(Col, Col) Col,
+) Collector(Type, Col) {
+	return impl(Type, Col){
+		supply:     supply,
+		accumulate: accumulate,
+		finish:     finish,
+		combine:    combine,
+	}
+}
+
+func (collector impl(Type, Col)) Supply() Col {
+	return collector.supply()
+}
+
+func (collector impl(Type, Col)) Accumulate(collection Col, item Type) Col {
+	return collector.accumulate(collection, item)
+}
+
+func (collector impl(Type, Col)) Finish(collection Col) Col {
+	if collector.finish == nil {
+		return collection
+	}
+	return collector.finish(collection)
+}
+
+func (collector impl(Type, Col)) Combine(collection1, collection2 Col) Col {
+	return collector.combine(collection1, collection2)
+}
+
+func ToMap(type Type interface{}, Key comparable, Value interface{})(
+	mapper func(Type) (Key, Value),
+	accumulator func(Value, Value) Value,
+) Collector(Type, map[Key]Value) {
+	return Of(
+		func() map[Key]Value {
+			return map[Key]Value{}
+		},
+		func(table map[Key]Value, item Type) map[Key]Value {
+			key, value := mapper(item)
+			now, _ := table[key]
+			table[key] = accumulator(now, value)
+			return table
+		},
+		func(table map[Key]Value) map[Key]Value {
+			return table
+		},
+		func(table1, table2 map[Key]Value) map[Key]Value {
+			for k2, v2 := range table2 {
+				v1, _ := table1[k2]
+				table1[k2] = accumulator(v1, v2)
+			}
+			return table1
+		},
+	)
+}

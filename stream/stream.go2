@@ -1,0 +1,197 @@
+package stream
+
+import (
+	"github.com/reconquest/goava/collector"
+	"runtime"
+	"sync"
+)
+
+type Stream(type Type) struct {
+	slice    []Type
+	parallel bool
+}
+
+type ParallelStream(type Type) struct {
+	Stream (Type)
+}
+
+func Of(type Type)(slice []Type) *Stream(Type) {
+	return &Stream(Type){
+		slice: slice,
+	}
+}
+
+func (stream *Stream(Type)) Parallel() *Stream(Type) {
+	stream.parallel = true
+	return stream
+}
+
+func (stream *Stream(Type)) Sequential() *Stream(Type) {
+	stream.parallel = false
+	return stream
+}
+
+func (stream *Stream(Type)) Filter(predicate func(Type) bool) *Stream(Type) {
+	filtered := []Type{}
+	for _, item := range stream.slice {
+		if predicate(item) {
+			filtered = append(filtered, item)
+		}
+	}
+	stream.slice = filtered
+	return stream
+}
+
+func (stream *Stream(Type)) AllMatch(predicate func(Type) bool) bool {
+	if len(stream.slice) == 0 {
+		return false
+	}
+
+	for _, item := range stream.slice {
+		if !predicate(item) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (stream *Stream(Type)) AnyMatch(predicate func(Type) bool) bool {
+	if len(stream.slice) == 0 {
+		return false
+	}
+
+	for _, item := range stream.slice {
+		if predicate(item) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (stream *Stream(Type)) NoneMatch(predicate func(Type) bool) bool {
+	if len(stream.slice) == 0 {
+		return true
+	}
+
+	for _, item := range stream.slice {
+		if predicate(item) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (stream *Stream(Type)) Len() int {
+	return len(stream.slice)
+}
+
+func (stream *Stream(Type)) ForEach(predicate func(Type)) *Stream(Type) {
+	for _, item := range stream.slice {
+		predicate(item)
+	}
+	return stream
+}
+
+func (stream *Stream(Type)) Slice() []Type {
+	return stream.slice
+}
+
+func (stream *Stream(Type)) Skip(n int) *Stream(Type) {
+	if n > cap(stream.slice) {
+		n = cap(stream.slice)
+	}
+	stream.slice = stream.slice[n:]
+	return stream
+}
+
+func Map(type Type, R)(stream *Stream(Type), predicate func(Type) R) *Stream(R) {
+	slice := make([]R, len(stream.slice))
+	for i, item := range stream.slice {
+		slice[i] = predicate(item)
+	}
+	return Of(slice)
+}
+
+func Reduce(type Type, R)(stream *Stream(Type), predicate func(R, Type) R) R {
+	var result R
+	for _, item := range stream.slice {
+		result = predicate(result, item)
+	}
+	return result
+}
+
+func Collect(type Type, Col)(
+	stream *Stream(Type),
+	collector collector.Collector(Type, Col),
+) Col {
+	if stream.parallel {
+		return collectParallel(Type, Col)(stream, collector)
+	}
+
+	return collectSequential(Type, Col)(stream, collector)
+}
+
+func collectSequential(type Type, Col)(
+	stream *Stream(Type),
+	collector collector.Collector(Type, Col),
+) Col {
+	collection := collector.Supply()
+	for _, item := range stream.slice {
+		collection = collector.Accumulate(collection, item)
+	}
+	return collector.Finish(collection)
+}
+
+func collectParallel(type Type, Col)(
+	stream *Stream(Type),
+	collector collector.Collector(Type, Col),
+) Col {
+	cpu := runtime.NumCPU()
+
+	pipe := make(chan Type)
+	done := make(chan struct{})
+	mutex := sync.Mutex{}
+	chunks := []Col{}
+
+	workers := sync.WaitGroup{}
+	workers.Add(cpu)
+	for i := 0; i < cpu; i++ {
+		go func() {
+			defer workers.Done()
+
+			chunk := collector.Supply()
+
+		loop:
+			for {
+				select {
+				case <-done:
+					break loop
+				case item := <-pipe:
+					chunk = collector.Accumulate(chunk, item)
+				}
+			}
+
+			mutex.Lock()
+			chunks = append(chunks, chunk)
+			mutex.Unlock()
+		}()
+	}
+
+	for i, _ := range stream.slice {
+		pipe <- stream.slice[i]
+	}
+
+	close(done)
+
+	workers.Wait()
+
+	collection := chunks[0]
+	for _, chunk := range chunks[1:] {
+		collection = collector.Combine(collection, chunk)
+	}
+
+	return collector.Finish(collection)
+}
