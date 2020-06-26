@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"sort"
 
 	"github.com/reconquest/goava/collector"
 	"github.com/reconquest/goava/stream"
@@ -146,12 +147,16 @@ func TestStrangeMoviesCustomCollectorButAtLeastItIsParallel(t *testing.T) {
 		t.Errorf("expected 4 items, got %d", len(result))
 	}
 
+	sort.Strings(result[1])
 	if !same(result[1], []string{"1 star A", "1 star B", "1 star C"}) {
 		t.Error(1, result[1])
 	}
+
+	sort.Strings(result[3])
 	if !same(result[3], []string{"3 stars A", "3 stars B"}) {
 		t.Error(3, result[3])
 	}
+
 	if !same(result[5], []string{"5 stars A"}) {
 		t.Error(5, result[5])
 	}
