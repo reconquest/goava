@@ -2,9 +2,17 @@
 
 Goava is a set of libraries based on draft version of Go 2 generics.
 
-Read more about go 2 generics: [https://blog.golang.org/generics-next-step](https://blog.golang.org/generics-next-step)
+[Read the blog post about this project](https://snake-ci.com/blog/go2go-stream)
 
-[Read the blog post about this project.](https://snake-ci.com/blog/go2go-stream)
+It's not ready for production or even development use.
+
+Bugs found while working on this project:
+* https://github.com/golang/go/issues/39834
+* https://github.com/golang/go/issues/39839
+* https://github.com/golang/go/issues/39853
+* https://github.com/golang/go/issues/39878
+
+Read more about the draft design of Go Generics: [https://blog.golang.org/generics-next-step](https://blog.golang.org/generics-next-step)
 
 ## Stream(T)
 

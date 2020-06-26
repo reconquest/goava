@@ -1,0 +1,23 @@
+package assert
+
+import "testing"
+import "fmt"
+
+func Equal(type T comparable)(
+	t *testing.T,
+	actual,
+	expected T,
+	msgs ...string,
+) bool {
+	if actual != expected {
+		msg := ""
+		if len(msgs) > 0 {
+			msg = fmt.Sprintf(msgs[0]+": ", msgs[1:])
+		}
+		t.Errorf("%sexpected value: %v but got: %v.", msg, expected, actual)
+
+		return false
+	}
+
+	return true
+}

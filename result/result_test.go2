@@ -1,0 +1,43 @@
+package result
+
+import (
+	"errors"
+	"os"
+	"testing"
+
+	"github.com/reconquest/goava/assert"
+)
+
+func TestIsOk(t *testing.T) {
+	assert.Equal(t, Ok(1).IsOk(), true)
+
+	assert.Equal(t, Err(int)(os.ErrNotExist).IsOk(), false)
+}
+
+func TestIsErr(t *testing.T) {
+	assert.Equal(t, Ok(1).IsErr(), false)
+
+	assert.Equal(t, Err(int)(os.ErrNotExist).IsErr(), true)
+}
+
+func TestAnd(t *testing.T) {
+	assert.Equal(t, Ok(1).And(Ok(2)).Ok(), 2)
+
+	assert.Equal(t, Ok(1).And(Err(int)(errors.New("a"))).IsOk(), false)
+
+	assert.Equal(t, Err(int)(errors.New("a")).And(Ok(1)).IsOk(), false)
+
+	// The tech is not there yet
+	// https://github.com/golang/go/issues/39878
+	// assert.Equal(t, Ok(1).And(Err(int)(os.ErrClosed)).Err(), os.ErrClosed)
+}
+
+func TestOr(t *testing.T) {
+	assert.Equal(t, Ok(1).Or(Ok(2)).Ok(), 1)
+
+	assert.Equal(t, Ok(1).Or(Err(int)(os.ErrClosed)).Ok(), 1)
+
+	assert.Equal(t, Err(int)(os.ErrClosed).Or(Ok(1)).Ok(), 1)
+
+	assert.Equal(t, Err(int)(errors.New("a")).Or(Err(int)(errors.New("b"))).Err().Error(), "b")
+}

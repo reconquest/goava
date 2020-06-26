@@ -1,0 +1,142 @@
+package result
+
+import "fmt"
+
+type Result(type T) interface {
+	// IsOk returns true if the result is Ok.
+	IsOk() bool
+
+	// IsErr returns true if the result is Err.
+	IsErr() bool
+
+	// And returns res if the result is Ok, otherwise returns the Err value of self.
+	And(res Result(T)) Result(T)
+
+	// OrElse Calls fn if the result is Err, otherwise returns the Ok value of self.
+	OrElse(func() Result(T)) Result(T)
+
+	// Returns res if the result is Err, otherwise returns the Ok value of self.
+	Or(res Result(T)) Result(T)
+
+	// Ok returns the contained Ok value.
+	// Panics if the result is an Err
+	Ok() T
+
+	// Err returns the contained Err value. Panics if the result is Ok
+	Err() error
+
+	// OkOr returns the contained Ok value or a provided default.
+	OkOr(T) T
+	// OkOrElse returns the contained Ok value or calls provided fn.
+	OkOrElse(fn func() T) T
+
+	// Expect returns the contained Ok value.
+	// Panics if the value is an Err, with a panic message including the passed message, and the content of the Err.
+	Expect(msg string) T
+
+	// Expect returns the contained Err value.
+	// Panics if the value is an Ok, with a panic message including the passed
+	// message, and the content of the Ok.
+	ExpectErr(msg string) error
+}
+
+func Ok(type T)(value T) Result(T) {
+	return &result(T){
+		ok:    true,
+		value: value,
+	}
+}
+
+func Err(type T)(err error) Result(T) {
+	return &result(T){
+		err: err,
+	}
+}
+
+type result(type T) struct {
+	value T
+	err   error
+	ok    bool
+}
+
+func (result *result(T)) IsOk() bool {
+	return result.ok
+}
+
+func (result *result(T)) IsErr() bool {
+	return !result.ok
+}
+
+func (result *result(T)) And(res Result(T)) Result(T) {
+	if result.IsErr() {
+		return Err(T)(result.Err())
+	}
+	if res.IsErr() {
+		return Err(T)(res.Err())
+	}
+	return res
+}
+
+func (result *result(T)) Expect(msg string) T {
+	if result.ok {
+		return result.value
+	}
+
+	panic(msg + ": " + result.err.Error())
+}
+
+func (result *result(T)) ExpectErr(msg string) error {
+	if !result.ok {
+		return result.err
+	}
+
+	panic(fmt.Sprintf("%s: %v", msg, result.value))
+}
+
+func (result *result(T)) Or(res Result(T)) Result(T) {
+	if result.ok {
+		return result
+	} else {
+		return res
+	}
+}
+
+func (result *result(T)) OrElse(fn func() Result(T)) Result(T) {
+	if result.ok {
+		return result
+	} else {
+		return fn()
+	}
+}
+
+func (result *result(T)) Ok() T {
+	if !result.ok {
+		panic(result.err)
+	}
+
+	return result.value
+}
+
+func (result *result(T)) Err() error {
+	if result.ok {
+		panic(result.ok)
+	}
+
+	return result.err
+}
+
+func (result *result(T)) OkOr(res T) T {
+	if result.ok {
+		return result.value
+	}
+
+	return res
+}
+
+func (result *result(T)) OkOrElse(fn func() T) T {
+	if result.ok {
+		return result.value
+	}
+
+	return fn()
+}
