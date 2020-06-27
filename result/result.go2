@@ -40,6 +40,13 @@ type Result(type T) interface {
 	ExpectErr(msg string) error
 }
 
+func From(type T)(value T, err error) Result(T) {
+	if err != nil {
+		return Err(T)(err) // can't infer T 
+	}
+	return Ok(value)
+}
+
 func Ok(type T)(value T) Result(T) {
 	return &result(T){
 		ok:    true,
@@ -140,3 +147,23 @@ func (result *result(T)) OkOrElse(fn func() T) T {
 
 	return fn()
 }
+
+// TODO: R type can't handle tuples
+func Match(type T, R)(r Result(T), ok func(T) R, err func(error) R) R {
+        if r.IsErr() {
+                return err(r.Err())
+        }
+
+        return ok(r.Ok())
+}
+
+func For(type T)(r Result(T), ok func(T), err func(error)) {
+        if r.IsErr() {
+                err(r.Err())
+                return
+        }
+
+        ok(r.Ok())
+}
+
+

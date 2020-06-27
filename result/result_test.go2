@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"strconv"
 
 	"github.com/reconquest/goava/assert"
 )
@@ -41,3 +42,64 @@ func TestOr(t *testing.T) {
 
 	assert.Equal(t, Err(int)(errors.New("a")).Or(Err(int)(errors.New("b"))).Err().Error(), "b")
 }
+
+func TestMatch(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		Match(From(strconv.Atoi("10")),
+			func(i int) (s struct{}) {
+				assert.Equal(t, i, 10)
+				return
+			},
+			func(err error) (s struct{}) {
+				t.Fatal("unreachable")
+				return
+			},
+		)
+	})
+
+	t.Run("err", func(t *testing.T) {
+		Match(From(strconv.Atoi("invalidstring")),
+			func(i int) (s struct{}) {
+				t.Fatal("unreachable")
+				return
+			},
+			func(err error) (s struct{}) {
+				if err == nil {
+					t.Errorf("expected not nil, got nil")
+				}
+				return
+			},
+		)
+	})
+}
+
+func TestFor(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		For(From(strconv.Atoi("10")),
+			func(i int) {
+				assert.Equal(t, i, 10)
+				return
+			},
+			func(err error) {
+				t.Fatal("unreachable")
+				return
+			},
+		)
+	})
+
+	t.Run("err", func(t *testing.T) {
+		For(From(strconv.Atoi("invalidstring")),
+			func(i int) {
+				t.Fatal("unreachable")
+				return
+			},
+			func(err error) {
+				if err == nil {
+					t.Errorf("expected not nil, got nil")
+				}
+				return
+			},
+		)
+	})
+}
+
